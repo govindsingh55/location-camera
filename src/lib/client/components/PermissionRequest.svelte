@@ -1,12 +1,16 @@
-
-
 <script lang="ts">
-let props = $props();
+	let props = $props();
 </script>
 
-<div class="flex min-h-[80vh] flex-col items-center justify-center gap-6 px-4 py-8 w-full">
-  <span class="material-symbols-outlined text-6xl text-primary">photo_camera</span>
-  <h2 class="text-xl sm:text-2xl font-bold text-center">Camera Permission Required</h2>
-  <p class="text-center text-base-content/80 text-base sm:text-lg">To use this app, please allow camera access.</p>
-  <button class="btn btn-primary w-full max-w-md" style="min-height:3rem;" onclick={props.onRequestPermission}>Allow Camera Access</button>
+<div class="flex min-h-[80vh] w-full flex-col items-center justify-center gap-6 px-3 py-6">
+	<span class="material-symbols-outlined text-5xl text-primary">photo_camera</span>
+	<h2 class="text-center text-lg font-bold sm:text-xl">Camera Permission Required</h2>
+	<p class="text-center text-sm text-base-content/80 sm:text-base">
+		To use this app, please allow camera access.
+	</p>
+	<button
+		class="btn w-full max-w-sm text-base btn-primary sm:text-lg"
+		style="min-height:2.75rem;"
+		onclick={props.onRequestPermission}>Allow Camera Access</button
+	>
 </div>

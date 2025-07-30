@@ -1,16 +1,16 @@
-
-
 <script lang="ts">
-let { videoEl = $bindable() } = $props();
+	let { videoEl = $bindable() } = $props();
 </script>
 
-<div class="relative aspect-video w-full max-w-md overflow-hidden rounded-box border border-base-200 shadow">
-  <video
-    bind:this={videoEl}
-    autoplay
-    playsinline
-    muted
-    class="h-full w-full bg-black object-cover"
-    style="display: block;"
-  ></video>
+<div
+	class="relative aspect-video h-full w-full max-w-sm overflow-hidden rounded-box border border-base-200 object-contain shadow"
+>
+	<video
+		bind:this={videoEl}
+		autoplay
+		playsinline
+		muted
+		class="h-full w-full rounded-box bg-black object-cover"
+		style="display: block; touch-action:manipulation;"
+	></video>
 </div>
