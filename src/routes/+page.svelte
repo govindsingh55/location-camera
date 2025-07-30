@@ -1,121 +1,150 @@
 <script lang="ts">
-	let videoEl: HTMLVideoElement | null = null;
-	let canvasEl: HTMLCanvasElement | null = null;
-	let stream: MediaStream | null = null;
-	let capturedImage: string | null = null;
-	let error: string | null = null;
-	let isCameraActive = false;
+	import AppLoading from '../lib/client/components/AppLoading.svelte';
+	import PermissionRequest from '../lib/client/components/PermissionRequest.svelte';
+	import CameraFooter from '../lib/client/components/CameraFooter.svelte';
+	import CameraView from '../lib/client/components/CameraView.svelte';
+	import CapturedImage from '../lib/client/components/CapturedImage.svelte';
+	import { tick } from 'svelte';
 
-	import { onMount } from 'svelte';
+	const state = $state({
+		videoEl: null as HTMLVideoElement | null,
+		canvasEl: null as HTMLCanvasElement | null,
+		stream: null as MediaStream | null,
+		capturedImage: null as string | null,
+		error: null as string | null,
+		isCameraActive: false,
+		isLoading: true,
+		permissionState: 'unknown' as 'unknown' | 'prompt' | 'granted' | 'denied'
+	});
+
+	$effect(() => {
+		(async () => {
+			state.isLoading = true;
+			const start = Date.now();
+			if (navigator.permissions && navigator.permissions.query) {
+				try {
+					const result = await navigator.permissions.query({ name: 'camera' as PermissionName });
+					state.permissionState = result.state as typeof state.permissionState;
+					result.onchange = () => {
+						state.permissionState = result.state as typeof state.permissionState;
+					};
+				} catch {
+					state.permissionState = 'unknown';
+				}
+			} else {
+				state.permissionState = 'unknown';
+			}
+			const elapsed = Date.now() - start;
+			if (elapsed < 400) {
+				await new Promise((r) => setTimeout(r, 400 - elapsed));
+			}
+			state.isLoading = false;
+		})();
+	});
 
 	async function startCamera() {
-		error = null;
-		capturedImage = null;
-		// Check for mediaDevices and getUserMedia support (modern and legacy)
+		state.error = null;
+		state.capturedImage = null;
+		state.isLoading = true;
 		const hasModern =
 			navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function';
 		const hasLegacy = typeof (navigator as any).getUserMedia === 'function';
 		if (!hasModern && !hasLegacy) {
-			error = 'Camera not supported on this device or browser.\nUserAgent: ' + navigator.userAgent;
-			console.error('navigator:', navigator);
+			state.error =
+				'Camera not supported on this device or browser.\nUserAgent: ' + navigator.userAgent;
+			state.isLoading = false;
 			return;
 		}
 		try {
-			// Try environment camera first, fallback to user camera if not available
 			let constraints = { video: { facingMode: { ideal: 'environment' } } };
 			const getMedia = hasModern
 				? (c: any) => navigator.mediaDevices.getUserMedia(c)
 				: (c: any) =>
 						new Promise((resolve, reject) => (navigator as any).getUserMedia(c, resolve, reject));
 			try {
-				stream = (await getMedia(constraints)) as MediaStream;
+				state.stream = (await getMedia(constraints)) as MediaStream;
 			} catch (err) {
-				// fallback to user camera
 				constraints = { video: { facingMode: { ideal: 'user' } } };
-				stream = (await getMedia(constraints)) as MediaStream;
+				state.stream = (await getMedia(constraints)) as MediaStream;
 			}
-			isCameraActive = true;
+			state.isCameraActive = true;
 			await tick();
-			if (videoEl) {
-				videoEl.srcObject = stream;
-				videoEl.muted = true; // for mobile autoplay
-				videoEl.setAttribute('playsinline', 'true'); // for iOS Safari
-				await videoEl.play();
+			// videoEl assignment now handled by $effect below
+			if (navigator.permissions && navigator.permissions.query) {
+				try {
+					const result = await navigator.permissions.query({ name: 'camera' as PermissionName });
+					state.permissionState = result.state as typeof state.permissionState;
+				} catch {}
 			}
 		} catch (e) {
-			console.error('Camera access error:', e);
-			error = 'Unable to access camera. ' + (e instanceof Error ? e.message : '');
+			state.error = 'Unable to access camera. ' + (e instanceof Error ? e.message : '');
 		}
+		state.isLoading = false;
 	}
 
-	import { tick } from 'svelte';
+	$effect(() => {
+		if (state.isCameraActive && state.videoEl && state.stream) {
+			state.videoEl.srcObject = state.stream;
+			state.videoEl.muted = true;
+			state.videoEl.setAttribute('playsinline', 'true');
+			state.videoEl.play();
+		}
+	});
 
 	function stopCamera() {
-		if (stream) {
-			stream.getTracks().forEach((track) => track.stop());
-			stream = null;
+		if (state.stream) {
+			state.stream.getTracks().forEach((track) => track.stop());
+			state.stream = null;
 		}
-		isCameraActive = false;
+		state.isCameraActive = false;
 	}
 
 	function capture() {
-		if (!videoEl || !canvasEl) return;
-		const w = videoEl.videoWidth;
-		const h = videoEl.videoHeight;
-		canvasEl.width = w;
-		canvasEl.height = h;
-		const ctx = canvasEl.getContext('2d');
+		if (!state.videoEl || !state.canvasEl) return;
+		const w = state.videoEl.videoWidth;
+		const h = state.videoEl.videoHeight;
+		state.canvasEl.width = w;
+		state.canvasEl.height = h;
+		const ctx = state.canvasEl.getContext('2d');
 		if (ctx) {
-			ctx.drawImage(videoEl, 0, 0, w, h);
-			capturedImage = canvasEl.toDataURL('image/png');
+			ctx.drawImage(state.videoEl, 0, 0, w, h);
+			state.capturedImage = state.canvasEl.toDataURL('image/png');
 		}
 		stopCamera();
 	}
 
 	function retake() {
-		capturedImage = null;
+		state.capturedImage = null;
 		startCamera();
 	}
 </script>
 
-<div class="flex min-h-[80vh] flex-col items-center justify-center gap-4 px-2 py-4">
-	<h1 class="mb-2 text-center text-2xl font-bold">Camera App</h1>
-
-	{#if error}
-		<div class="alert w-full max-w-xs alert-error">{error}</div>
-	{/if}
-
-	{#if capturedImage}
-		<div class="flex w-full flex-col items-center gap-4">
-			<img
-				src={capturedImage}
-				alt="Captured"
-				class="aspect-video w-full max-w-xs rounded-box border border-base-200 object-cover shadow"
-			/>
-			<button class="btn w-full max-w-xs btn-primary" on:click={retake}>Retake</button>
+<div
+	class={[
+		'flex min-h-screen flex-col items-center justify-center border bg-base-100',
+		state.permissionState === 'granted' && 'justify-end'
+	]}
+>
+	{#if state.isLoading}
+		<AppLoading message="Opening app..." />
+	{:else if state.error}
+		<div class="alert w-full max-w-xs alert-error">{state.error}</div>
+	{:else if state.capturedImage}
+		<CapturedImage src={state.capturedImage} onRetake={retake} />
+	{:else if state.isCameraActive}
+		<div class="flex w-full flex-col items-center">
+			<CameraView bind:videoEl={state.videoEl} />
+			<CameraFooter onCapture={capture} />
+			<button class="btn mt-2 w-full max-w-xs btn-ghost" onclick={stopCamera}>Close Camera</button>
 		</div>
-	{:else if isCameraActive}
-		<div
-			class="relative aspect-video w-full max-w-xs overflow-hidden rounded-box border border-base-200 shadow"
-		>
-			<video
-				bind:this={videoEl}
-				autoplay
-				playsinline
-				muted
-				class="h-full w-full bg-black object-cover"
-				style="display: block;"
-			></video>
-			<button
-				class="btn absolute bottom-2 left-1/2 z-10 w-11/12 max-w-xs -translate-x-1/2 btn-success"
-				on:click={capture}
-			>
-				<span class="material-symbols-outlined mr-1 align-middle">photo_camera</span> Capture Photo
-			</button>
-		</div>
-		<button class="btn mt-2 w-full max-w-xs btn-ghost" on:click={stopCamera}>Close Camera</button>
+	{:else if state.permissionState === 'prompt' || state.permissionState === 'unknown'}
+		<PermissionRequest onRequestPermission={startCamera} />
+	{:else if state.permissionState === 'granted'}
+		<button class="btn w-full max-w-xs btn-primary" onclick={startCamera}>Open Camera</button>
 	{:else}
-		<button class="btn w-full max-w-xs btn-primary" on:click={startCamera}>Open Camera</button>
+		<div class="alert w-full max-w-xs alert-error">
+			Camera permission denied. Please enable camera access in your browser settings.
+		</div>
 	{/if}
-	<canvas bind:this={canvasEl} class="hidden"></canvas>
+	<canvas bind:this={state.canvasEl} class="hidden"></canvas>
 </div>
